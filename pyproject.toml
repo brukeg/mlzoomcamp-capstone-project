@@ -1,12 +1,11 @@
 [project]
 name = "mlzoomcamp-capstone-project"
-version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+version = "0.0.1"
 requires-python = ">=3.12"
 dependencies = [
-    "jupyter>=1.1.1",
-    "matplotlib>=3.10.8",
-    "numpy>=2.3.5",
-    "pandas>=2.3.3",
+  "numpy>=2.1,<3",
+  "pandas",
+  "matplotlib",
+  "jupyter",
+  "tensorflow==2.20.*",
 ]
