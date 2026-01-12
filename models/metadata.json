@@ -1,0 +1,19 @@
+{
+  "model_path": "models/cats_dogs.keras",
+  "img_size": 160,
+  "labels": {
+    "0": "cat",
+    "1": "dog"
+  },
+  "tf_version": "2.20.0",
+  "train_size": 18610,
+  "val_size": 4652,
+  "final_metrics": {
+    "accuracy": 0.9675980806350708,
+    "auc": 0.9944581389427185,
+    "loss": 0.08893802016973495,
+    "val_accuracy": 0.9752794504165649,
+    "val_auc": 0.9973404407501221,
+    "val_loss": 0.06307996809482574
+  }
+}

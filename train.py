@@ -1,94 +1,163 @@
-# predict.py
-import io
+# train.py
+import argparse
+import json
 import os
-from typing import Optional
+from pathlib import Path
 
-import numpy as np
-import requests
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from PIL import Image
-
-# Silence TF noise + force CPU
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
-
-import tensorflow as tf  # noqa: E402
+import tensorflow as tf
+import tensorflow_datasets as tfds
 
 
-APP_TITLE = "Cats vs Dogs Classifier"
-MODEL_PATH = os.getenv("MODEL_PATH", "models/cats_dogs.keras")
-IMG_SIZE = int(os.getenv("IMG_SIZE", "160"))  # keep in sync with training
+def build_datasets(img_size: int, batch_size: int, val_split: float):
+    """
+    TFDS cats_vs_dogs returns ~23k images. We'll do a deterministic split.
+    We use as_supervised=True to get (image, label) pairs.
+    Labels: 0=cat, 1=dog (TFDS convention).
+    """
+    ds_train_full = tfds.load(
+        "cats_vs_dogs",
+        split="train",
+        as_supervised=True,
+        shuffle_files=True,
+    )
+
+    # Cache the cardinality for a deterministic split
+    n = tf.data.experimental.cardinality(ds_train_full).numpy()
+    if n <= 0:
+        raise RuntimeError("Could not determine dataset size (cardinality).")
+
+    n_val = int(n * val_split)
+    n_train = n - n_val
+
+    # Deterministic split: first n_train for train, last n_val for validation
+    ds_train = ds_train_full.take(n_train)
+    ds_val = ds_train_full.skip(n_train)
+
+    def preprocess(image, label):
+        image = tf.image.resize(image, (img_size, img_size))
+        image = tf.cast(image, tf.float32) / 255.0
+        label = tf.cast(label, tf.float32)
+        return image, label
+
+    num_calls = 2
+
+    ds_train = (
+        ds_train
+        .map(preprocess, num_parallel_calls=num_calls)
+        .shuffle(2_000)
+        .batch(batch_size)
+        .prefetch(1)
+    )
+
+    ds_val = (
+        ds_val
+        .map(preprocess, num_parallel_calls=num_calls)
+        .batch(batch_size)
+        .prefetch(1)
+    )
+
+    return ds_train, ds_val, n_train, n_val
 
 
-app = FastAPI(title=APP_TITLE)
+def build_model(img_size: int, lr: float, dropout: float):
+    """
+    MobileNetV2 transfer learning:
+    - base pretrained on ImageNet
+    - freeze base
+    - small classification head (sigmoid)
+    """
+    inputs = tf.keras.Input(shape=(img_size, img_size, 3))
+
+    base = tf.keras.applications.MobileNetV2(
+        input_shape=(img_size, img_size, 3),
+        include_top=False,
+        weights="imagenet",
+    )
+    base.trainable = False
+
+    x = base(inputs, training=False)
+    x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    x = tf.keras.layers.Dropout(dropout)(x)
+    outputs = tf.keras.layers.Dense(1, activation="sigmoid")(x)
+
+    model = tf.keras.Model(inputs, outputs)
+
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=lr),
+        loss="binary_crossentropy",
+        metrics=[
+            tf.keras.metrics.BinaryAccuracy(name="accuracy"),
+            tf.keras.metrics.AUC(name="auc"),
+        ],
+    )
+
+    return model
 
 
-_model: Optional[tf.keras.Model] = None
+def main():
+    parser = argparse.ArgumentParser(description="Train Cats vs Dogs model (TFDS) with MobileNetV2.")
+    parser.add_argument("--img-size", type=int, default=160)
+    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--val-split", type=float, default=0.2)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--dropout", type=float, default=0.2)
+    parser.add_argument("--model-path", type=str, default="models/cats_dogs.keras")
+    args = parser.parse_args()
+
+    # Force CPU + reduce TF logging noise
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
+    ds_train, ds_val, n_train, n_val = build_datasets(
+        img_size=args.img_size,
+        batch_size=args.batch_size,
+        val_split=args.val_split,
+    )
+
+    print(f"Train size: {n_train} | Val size: {n_val}")
+    print(f"img_size={args.img_size} batch_size={args.batch_size} epochs={args.epochs}")
+
+    model = build_model(img_size=args.img_size, lr=args.lr, dropout=args.dropout)
+    model.summary()
+
+    callbacks = [
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_auc",
+            mode="max",
+            patience=2,
+            restore_best_weights=True,
+        )
+    ]
+
+    history = model.fit(
+        ds_train,
+        validation_data=ds_val,
+        epochs=args.epochs,
+        callbacks=callbacks,
+        verbose=1,
+    )
+
+    # Save model + metadata
+    model_path = Path(args.model_path)
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save(model_path)
+
+    metadata = {
+    "model_path": str(model_path),
+    "img_size": int(args.img_size),
+    "labels": {"0": "cat", "1": "dog"},
+    "tf_version": str(tf.__version__),
+    "train_size": int(n_train),
+    "val_size": int(n_val),
+    "final_metrics": {str(k): float(v[-1]) for k, v in history.history.items()},
+    }
+
+    meta_path = model_path.parent / "metadata.json"
+    meta_path.write_text(json.dumps(metadata, indent=2))
+    print(f"Saved model to: {model_path}")
+    print(f"Saved metadata to: {meta_path}")
 
 
-def get_model() -> tf.keras.Model:
-    global _model
-    if _model is None:
-        if not os.path.exists(MODEL_PATH):
-            raise FileNotFoundError(
-                f"Model not found at '{MODEL_PATH}'. Train it first (train.py) or set MODEL_PATH."
-            )
-        _model = tf.keras.models.load_model(MODEL_PATH)
-    return _model
-
-
-def load_image_from_bytes(data: bytes) -> Image.Image:
-    try:
-        img = Image.open(io.BytesIO(data)).convert("RGB")
-        return img
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid image file: {e}")
-
-
-def preprocess(img: Image.Image) -> np.ndarray:
-    img = img.resize((IMG_SIZE, IMG_SIZE))
-    x = np.asarray(img, dtype=np.float32) / 255.0
-    x = np.expand_dims(x, axis=0)  # (1, H, W, 3)
-    return x
-
-
-def predict_proba(x: np.ndarray) -> float:
-    model = get_model()
-    y = model.predict(x, verbose=0)
-    # Expecting sigmoid output shape (1, 1) or (1,)
-    p = float(np.ravel(y)[0])
-    return p
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.post("/predict")
-async def predict(file: UploadFile = File(None), url: Optional[str] = None):
-    if file is None and not url:
-        raise HTTPException(status_code=400, detail="Provide either a file upload or a url parameter.")
-
-    if file is not None and url:
-        raise HTTPException(status_code=400, detail="Provide only one: file OR url, not both.")
-
-    if url:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; mlzoomcamp-capstone/1.0; +https://github.com/)"
-            }
-        try:
-            r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-            r.raise_for_status()
-            data = r.content
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to download url: {e}")
-    else:
-        data = await file.read()
-
-    img = load_image_from_bytes(data)
-    x = preprocess(img)
-    p = predict_proba(x)
-
-    label = "dog" if p >= 0.5 else "cat"
-    return {"label": label, "probability": p}
+if __name__ == "__main__":
+    main()
