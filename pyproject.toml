@@ -16,4 +16,5 @@ dependencies = [
   "uvicorn[standard]>=0.27",
   "python-multipart>=0.0.9",
   "requests>=2.31",
+  "ipykernel>=7.1.0",
 ]
