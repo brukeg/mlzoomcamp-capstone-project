@@ -28,6 +28,25 @@ This is a closed-set binary classifier: every input image is forced into one of 
 
 No manual dataset download is required.
 
+## Exploratory Data Analysis (EDA)
+
+EDA and model experiments are documented in `notebooks/notebook.ipynb`.
+
+The analysis includes:
+- Visualization of sample images per class
+- Class balance inspection
+- Image size and aspect-ratio distribution
+- Examples of preprocessing and data augmentation
+- Comparison of baseline CNN vs. transfer learning performance
+
+### Data Splits
+The dataset is split deterministically into:
+- 80% training
+- 10% validation
+- 10% test
+
+All splits are derived from the TFDS `train` split to ensure reproducibility.
+
 ## Model
 - Architecture: MobileNetV2 (transfer learning)
 - Pretrained on: ImageNet
@@ -35,11 +54,22 @@ No manual dataset download is required.
 - Output: Single sigmoid unit (P(dog))
 
 ## Training Setup
-- The MobileNetV2 backbone is frozen
-- A small custom classification head is trained on top
-- Metrics tracked during training:
- - Binary accuracy
- - AUC
+
+Model development and selection were performed in a Jupyter notebook (`notebooks/notebook.ipynb`) and then consolidated into a reproducible training script (`train.py`).
+
+Two models were trained and evaluated:
+
+1. **Baseline CNN**
+   - Small custom convolutional neural network trained from scratch
+   - Used as a performance baseline on the dataset
+
+2. **MobileNetV2 (Transfer Learning)**
+   - Pretrained on ImageNet
+   - Backbone frozen
+   - Lightweight classification head trained on top
+
+Both models were evaluated using accuracy and AUC.  
+MobileNetV2 consistently outperformed the baseline CNN while training faster and more stably on CPU, and was selected as the final model.
 
 The trained model is saved to disk and reused by the inference service.
 
@@ -53,7 +83,8 @@ The trained model is saved to disk and reused by the inference service.
 ├── models/
 │   ├── cats_dogs.keras # Trained model artifact
 │   └── metadata.json   # Model metadata
-├── notebooks/          # Exploratory notebooks
+├── notebooks/
+│   └── EDA.ipynb       # Exploratory Data Analysis
 ├── k8s/                # Kubernetes manifests (not yet applied)
 └── README.md
 ```
@@ -72,10 +103,12 @@ uv sync
 
 ## Training the Model
 
-To train the model from scratch:
+To train the final selected model (MobileNetV2) from scratch:
 ```bash
 uv run python train.py --epochs 1 --img-size 160 --batch-size 8
 ```
+The training script mirrors the final configuration selected in the notebook
+(augmentation, batch size, dropout, early stopping, and data splits).
 
 This will:
 1. Download and prepare the Cats vs Dogs dataset (if not already cached)
