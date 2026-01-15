@@ -1,1 +1,44 @@
-# pass
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cats-dogs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cats-dogs
+  template:
+    metadata:
+      labels:
+        app: cats-dogs
+    spec:
+      containers:
+        - name: cats-dogs
+          image: cats-dogs-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MODEL_PATH
+              value: "models/cats_dogs.keras"
+            - name: IMG_SIZE
+              value: "160"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
