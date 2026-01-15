@@ -1,1 +1,12 @@
-# pass
+apiVersion: v1
+kind: Service
+metadata:
+  name: cats-dogs
+spec:
+  type: ClusterIP
+  selector:
+    app: cats-dogs
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
