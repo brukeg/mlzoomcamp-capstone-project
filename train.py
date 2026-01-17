@@ -1,4 +1,14 @@
-# train.py
+"""
+Training script for a Cats vs Dogs binary image classifier.
+
+This script:
+- Loads the TFDS `cats_vs_dogs` dataset
+- Creates deterministic train/validation/test splits similar to the notebook
+- Applies preprocessing and light data augmentation
+- Trains a MobileNetV2-based transfer learning model
+- Evaluates on a held-out test set
+- Saves the trained model and training metadata
+"""
 import argparse
 import json
 import os
@@ -10,12 +20,27 @@ import tensorflow_datasets as tfds
 
 def build_datasets(img_size: int, batch_size: int, val_split: float, test_split: float, seed: int):
     """
-    TFDS cats_vs_dogs returns ~23k images.
-    We create a deterministic split from TFDS split="train":
-      train/val/test = (1 - val_split - test_split) / val_split / test_split
+    Build train, validation, and test datasets from TFDS cats_vs_dogs.
+    
+    Args:
+        img_size (int): Target image height and width.
+        batch_size (int): Batch size for training and evaluation.
+        val_split (float): Fraction of data reserved for validation.
+        test_split (float): Fraction of data reserved for testing.
+        seed (int): Random seed for shuffling.
 
-    TFDS provides (image, label) with as_supervised=True
-    Labels: 0=cat, 1=dog (TFDS convention).
+    Returns:
+        tuple:
+            - ds_train (tf.data.Dataset): Training dataset.
+            - ds_val (tf.data.Dataset): Validation dataset.
+            - ds_test (tf.data.Dataset): Test dataset.
+            - n_train (int): Number of training samples.
+            - n_val (int): Number of validation samples.
+            - n_test (int): Number of test samples.
+
+    Raises:
+        ValueError: If split fractions are invalid.
+        RuntimeError: If dataset cardinality cannot be determined.
     """
     if val_split <= 0 or test_split <= 0:
         raise ValueError("val_split and test_split must be > 0")
@@ -42,12 +67,22 @@ def build_datasets(img_size: int, batch_size: int, val_split: float, test_split:
     ds_test_raw = ds_full.skip(n_train + n_val).take(n_test)
 
     def preprocess(image, label):
+        """
+        Resize and normalize an image-label pair.
+
+        Args:
+            image (tf.Tensor): Input image tensor.
+            label (tf.Tensor): Binary class label.
+
+        Returns:
+            tuple: (image, label) tensors.
+        """
         image = tf.image.resize(image, (img_size, img_size))
         image = tf.cast(image, tf.float32) / 255.0
         label = tf.cast(label, tf.float32)
         return image, label
 
-    # Simple augmentation (kept modest) - matches the notebook
+    # Modest data augmentation to reduce overfitting - matches my notebook
     augment = tf.keras.Sequential(
         [
             tf.keras.layers.RandomFlip("horizontal"),
@@ -56,11 +91,31 @@ def build_datasets(img_size: int, batch_size: int, val_split: float, test_split:
     )
 
     def preprocess_with_aug(image, label):
+        """
+        Apply preprocessing and data augmentation.
+
+        Args:
+            image (tf.Tensor): Input image tensor.
+            label (tf.Tensor): Binary class label.
+
+        Returns:
+            tuple: Augmented (image, label) tensors.
+        """
         image, label = preprocess(image, label)
         image = augment(image, training=True)
         return image, label
 
     def make_ds(ds_raw, training: bool):
+        """
+        Create a batched and prefetched dataset.
+
+        Args:
+            ds_raw (tf.data.Dataset): Raw dataset split.
+            training (bool): Whether this dataset is used for training.
+
+        Returns:
+            tf.data.Dataset: Prepared dataset.
+        """
         if training:
             ds = ds_raw.map(preprocess_with_aug, num_parallel_calls=tf.data.AUTOTUNE)
             ds = ds.shuffle(2_000, seed=seed, reshuffle_each_iteration=True)
@@ -79,10 +134,20 @@ def build_datasets(img_size: int, batch_size: int, val_split: float, test_split:
 
 def build_model(img_size: int, lr: float, dropout: float):
     """
-    MobileNetV2 transfer learning:
-    - base pretrained on ImageNet
-    - freeze base
-    - classification head (sigmoid)
+    Build and compile a MobileNetV2-based binary classifier.
+
+    Architecture:
+    - MobileNetV2 pretrained on ImageNet (frozen)
+    - Dropout regularization
+    - Sigmoid output for binary classification
+
+    Args:
+        img_size (int): Input image height and width.
+        lr (float): Learning rate for the Adam optimizer.
+        dropout (float): Dropout rate before the final layer.
+
+    Returns:
+        tf.keras.Model: Compiled Keras model.
     """
     inputs = tf.keras.Input(shape=(img_size, img_size, 3))
 
@@ -111,7 +176,15 @@ def build_model(img_size: int, lr: float, dropout: float):
 
 
 def _to_py(x):
-    # JSON-safe scalar conversion
+    """
+    Helper to convert TensorFlow / NumPy scalars to JSON-serializable Python types.
+
+    Args:
+        x: Scalar value or object.
+
+    Returns:
+        Python-native scalar when possible.
+    """
     try:
         return float(x)
     except Exception:
@@ -119,6 +192,9 @@ def _to_py(x):
 
 
 def main():
+    """
+    Entry point for training, evaluation, and artifact persistence.
+    """
     parser = argparse.ArgumentParser(description="Train Cats vs Dogs model (TFDS) with MobileNetV2.")
     parser.add_argument("--img-size", type=int, default=160)
     parser.add_argument("--batch-size", type=int, default=8)
@@ -131,7 +207,7 @@ def main():
     parser.add_argument("--model-path", type=str, default="models/cats_dogs.keras")
     args = parser.parse_args()
 
-    # Reduce TF logging noise (CPU-only in Codespaces)
+    # Reduce TensorFlow logging noise and force Codespace friendly CPU-only execution
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 
@@ -172,7 +248,7 @@ def main():
         verbose=1,
     )
 
-    # Evaluate on test set (matches notebook intent)
+    # Evaluate on test set (matches my notebook)
     test_metrics = model.evaluate(ds_test, verbose=0, return_dict=True)
     print("Test metrics:", test_metrics)
 
