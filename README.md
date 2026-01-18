@@ -92,8 +92,7 @@ Two models were trained and evaluated:
    - Backbone frozen
    - Lightweight classification head trained on top
 
-Both models were evaluated using accuracy and AUC.  
-MobileNetV2 consistently outperformed the baseline CNN while training faster and more stably on CPU, and was selected as the final model.
+Both models were evaluated using accuracy and AUC. MobileNetV2 consistently outperformed the baseline CNN while training faster and more stably on CPU, and was selected as the final model.
 
 The trained model is saved to disk and reused by the inference service.
 
@@ -117,7 +116,7 @@ The trained model is saved to disk and reused by the inference service.
 ├── pyproject.toml                # Dependencies managed with uv
 ├── train.py                      # Training script (TFDS + MobileNetV2)
 ├── uv.lock                       # Locked dependency versions
-├──screenshots/
+└── screenshots/
     ├── deployment.png            # K8s deployment screenshot
     ├── request.png               # K8s example request screenshot
     └── service.png               # K8s running service screenshot
@@ -131,12 +130,15 @@ The trained model is saved to disk and reused by the inference service.
 - API framework: FastAPI + Uvicorn
 
 This project intentionally runs inference on CPU only to keep the setup lightweight and reproducible in constrained environments.
-**Moreover, it's intended for use within a github Codespace**
+**Moreover, it's intended for use within a github Codespace.** 
 
-To install dependencies:
-```bash
-uv sync
-```
+# The recommended way to run this project is via **GitHub Codespaces**:
+
+1. Open this repository on GitHub
+2. Click **Code → Create codespace on main**
+3. Wait for the Codespace to finish initializing
+
+This will open a Linux environment with the repository already checked out and ready to run.
 
 ## Training the Model
 
@@ -154,37 +156,6 @@ This will:
 4. Write training metadata to models/metadata.json
 
 ## Running the Inference Service
-
-### Start the API locally:
-```bash
-uv run uvicorn predict:app --host 0.0.0.0 --port 8000
-```
-### Health Check
-```bash
-curl -s http://localhost:8000/health | jq
-```
-Response:
-```json
-{"status":"ok"}
-```
-
-## Making Predictions
-### Predict from an image URL
-```bash
-curl -s -X POST "http://localhost:8000/predict?url=https://upload.wikimedia.org/wikipedia/commons/3/3a/Cat03.jpg" | jq
-```
-
-Example response:
-```json
-{
-  "label": "cat",
-  "probability": 0.00012662613880820572
-}
-```
-### Predict from a local image file
-```bash
-curl -s -X POST http://localhost:8000/predict -F "file=@cat.jpg" | jq
-```
 
 ## Docker
 ### Build the image
@@ -225,12 +196,16 @@ kubectl port-forward svc/cats-dogs 8000:80
 ### Test the deployed service
 #### Health check
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/health | jq
 ```
 
 #### Predict
 curl -s -X POST \
   "http://localhost:8000/predict?url=https://upload.wikimedia.org/wikipedia/commons/3/3a/Cat03.jpg" \
+  | jq
+
+curl -s -X POST \
+  "http://localhost:8000/predict?url=https://www.nylabone.com/-/media/project/oneweb/nylabone/images/dog101/10-intelligent-dog-breeds/golden-retriever-tongue-out.jpg" \
   | jq
 
 ## Kubernetes Image Loading Note (Important)
@@ -247,11 +222,47 @@ This behavior is expected given the problem framing and training data.
 
 The inference service was deployed to a Kubernetes cluster.
 
-**Deployment running:**
-![Deployment](screenshots/k8s-deployment-running.png)
-
-**Service exposed:**
-![Service](screenshots/service-exposed.png)
+**Deployment running and service exposed:**
+![Deployment](screenshots/deployment-service.jpg)
 
 **Prediction request:**
-![Prediction](screenshots/curl-predict-response.png)
+![Prediction](screenshots/request.jpg)
+
+## Optional: Local Development (Fallback)
+I recommend sticking to the Kubernetes in Docker method above, but if that fails you can run inference locally.
+
+### To install dependencies:
+```bash
+uv sync
+```
+
+### Start the API locally:
+```bash
+uv run uvicorn predict:app --host 0.0.0.0 --port 8000
+```
+### Health Check
+```bash
+curl -s http://localhost:8000/health | jq
+```
+Response:
+```json
+{"status":"ok"}
+```
+
+## Making Predictions
+### Predict from an image URL
+```bash
+curl -s -X POST "http://localhost:8000/predict?url=https://upload.wikimedia.org/wikipedia/commons/3/3a/Cat03.jpg" | jq
+```
+
+Example response:
+```json
+{
+  "label": "cat",
+  "probability": 0.00012662613880820572
+}
+```
+### Predict from a local image file
+```bash
+curl -s -X POST http://localhost:8000/predict -F "file=@cat.jpg" | jq
+```
