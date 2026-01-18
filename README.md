@@ -117,6 +117,10 @@ The trained model is saved to disk and reused by the inference service.
 ├── pyproject.toml                # Dependencies managed with uv
 ├── train.py                      # Training script (TFDS + MobileNetV2)
 ├── uv.lock                       # Locked dependency versions
+├──screenshots/
+    ├── deployment.png            # K8s deployment screenshot
+    ├── request.png               # K8s example request screenshot
+    └── service.png               # K8s running service screenshot
 ```
 
 ## Environment & Dependencies
@@ -238,3 +242,16 @@ Loading large Docker images (e.g., TensorFlow-based images) into a local kind cl
 - Inputs outside the training distribution (e.g., humans, objects) are still classified as either cat or dog
 - The reported probability reflects the model’s confidence within this closed set, not real-world certainty
 This behavior is expected given the problem framing and training data.
+
+## Cloud / Kubernetes Deployment
+
+The inference service was deployed to a Kubernetes cluster.
+
+**Deployment running:**
+![Deployment](screenshots/k8s-deployment-running.png)
+
+**Service exposed:**
+![Service](screenshots/service-exposed.png)
+
+**Prediction request:**
+![Prediction](screenshots/curl-predict-response.png)
