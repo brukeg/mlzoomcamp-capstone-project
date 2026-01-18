@@ -7,3 +7,5 @@ k8s
 .git
 .gitignore
 README.md
+screenshots
+tensorflow_datasets
