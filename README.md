@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This project implements an end-to-end image classification service that predicts whether an image contains a cat or a dog. It is built to demonstrate core concepts from the second half of the ML Zoomcamp, including:
+This project implements an end-to-end image classification service that predicts whether an image contains a cat or a dog. It is built to demonstrate core concepts from the second half of the Machine Learning Zoomcamp, including:
 
 - Convolutional neural networks with transfer learning
 - Reproducible training using a scripted pipeline
@@ -16,7 +16,7 @@ The project intentionally focuses on clarity and correctness over scope: a well-
 
 ## Problem Description
 
-Given an input image, the system predicts one of two classes:
+Given an input image (of either a cat or a dog), the system predicts one of two classes:
 - cat
 - dog
 
@@ -28,8 +28,7 @@ This is a **closed-set binary classifier**: every input image is forced into one
 
 ## Dataset
 
-- Source: TensorFlow Datasets (`cats_vs_dogs`)
-- Description: Labeled images of cats and dogs collected from the Asirra CAPTCHA dataset
+- Source: [TensorFlow Datasets](https://www.tensorflow.org/datasets/catalog/cats_vs_dogs?utm_source=chatgpt.com) (`cats_vs_dogs`)
 
 **Notes:**
 - Corrupted images are automatically skipped by TFDS
@@ -41,7 +40,7 @@ No manual dataset download is required.
 
 ## Exploratory Data Analysis (EDA)
 
-EDA and model experiments are documented in `notebooks/notebook.ipynb`.
+EDA and model experiments are documented in `notebooks/EDA.ipynb`.
 
 The analysis includes:
 - Visualization of sample images per class
@@ -61,8 +60,16 @@ All splits are derived from the TFDS `train` split to ensure reproducibility.
 
 ---
 
-## Model
+## Models
 
+### Baseline CNN (from scratch)
+- Architecture: Custom convolutional neural network
+- Regularization: Dropout (0.3)
+- Input size: 160 × 160 RGB images
+- Output: Single sigmoid unit (P(dog))
+- Training: Trained from scratch (no pretrained weights)
+
+### MobileNetV2
 - Architecture: MobileNetV2 (transfer learning)
 - Pretrained on: ImageNet
 - Input size: 160 × 160 RGB images
@@ -72,7 +79,7 @@ All splits are derived from the TFDS `train` split to ensure reproducibility.
 
 ## Training Setup
 
-Model development and selection were performed in a Jupyter notebook (`notebooks/notebook.ipynb`) and then consolidated into a reproducible training script (`train.py`).
+Model development and selection were performed in a Jupyter notebook (`notebooks/EDA.ipynb`) and then consolidated into a reproducible training script (`train.py`).
 
 Two models were trained and evaluated:
 
@@ -96,18 +103,20 @@ The trained model is saved to disk and reused by the inference service.
 
 ```bash
 .
-├── train.py            # Training script (TFDS + MobileNetV2)
-├── predict.py          # FastAPI inference service
-├── Dockerfile          # Container image for inference service
-├── pyproject.toml      # Dependencies managed with uv
-├── uv.lock             # Locked dependency versions
-├── models/
-│   ├── cats_dogs.keras # Trained model artifact
-│   └── metadata.json   # Model metadata
-├── notebooks/
-│   └── notebook.ipynb  # EDA + model comparison
-├── k8s/                # Kubernetes manifests
-└── README.md
+├── Dockerfile                    # Container image for inference service
+├── README.md                     # This file
+├── k8s                           
+│   ├── deployment.yaml           # FastAPI inference service
+│   └── service.yaml              # Inference Deployment within the cluster
+├── models
+│   ├── cats_dogs.keras           # Trained model artifact
+│   └── metadata.json             # Model metadata
+├── notebooks
+│   └── EDA.ipynb                 # EDA + model comparison
+├── predict.py                    # FastAPI inference service
+├── pyproject.toml                # Dependencies managed with uv
+├── train.py                      # Training script (TFDS + MobileNetV2)
+├── uv.lock                       # Locked dependency versions
 ```
 
 ## Environment & Dependencies
@@ -118,6 +127,7 @@ The trained model is saved to disk and reused by the inference service.
 - API framework: FastAPI + Uvicorn
 
 This project intentionally runs inference on CPU only to keep the setup lightweight and reproducible in constrained environments.
+**Moreover, it's intended for use within a github Codespace**
 
 To install dependencies:
 ```bash
@@ -222,12 +232,6 @@ curl -s -X POST \
 ## Kubernetes Image Loading Note (Important)
 
 Loading large Docker images (e.g., TensorFlow-based images) into a local kind cluster can be slow or unreliable in disk-constrained environments such as GitHub Codespaces.
-
-### TODO (Planned Improvement)
-
-Publish the Docker image to a container registry (e.g., Docker Hub or GitHub Container Registry) and update the Kubernetes manifests to pull the image directly.
-
-This will allow reviewers to deploy the service without waiting for kind load docker-image.
 
 ## Limitations
 - This is a binary, closed-set classifier
