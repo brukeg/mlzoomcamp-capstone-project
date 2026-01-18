@@ -140,21 +140,6 @@ This project intentionally runs inference on CPU only to keep the setup lightwei
 
 This will open a Linux environment with the repository already checked out and ready to run.
 
-## Training the Model
-
-To train the final selected model (MobileNetV2) from scratch:
-```bash
-uv run python train.py --epochs 1 --img-size 160 --batch-size 8
-```
-The training script mirrors the final configuration selected in the notebook
-(augmentation, batch size, dropout, early stopping, and data splits).
-
-This will:
-1. Download and prepare the Cats vs Dogs dataset (if not already cached)
-2. Train the MobileNetV2-based classifier
-3. Save the trained model to models/cats_dogs.keras
-4. Write training metadata to models/metadata.json
-
 ## Running the Inference Service
 
 ## Docker
@@ -229,8 +214,11 @@ The inference service was deployed to a Kubernetes cluster.
 ![Prediction](screenshots/request.jpg)
 
 ## Optional: Local Development (Fallback)
-I recommend sticking to the Kubernetes in Docker method above, but if that fails you can run inference locally.
 
+The recommended way to run this project is via Docker or Kubernetes as described above.  
+If those options fail for any reason, you can run the inference service locally.
+
+Note: This requires a local Python environment. If you have not already installed dependencies, run:
 ### To install dependencies:
 ```bash
 uv sync
@@ -266,3 +254,19 @@ Example response:
 ```bash
 curl -s -X POST http://localhost:8000/predict -F "file=@cat.jpg" | jq
 ```
+
+## Optional: Training the Model (Reproducibility)
+This step is optional. The repository includes a trained model artifact in models/ so you can run inference immediately.
+
+To train the final selected model (MobileNetV2) from scratch:
+```bash
+uv run python train.py --epochs 1 --img-size 160 --batch-size 8
+```
+The training script mirrors the final configuration selected in the notebook
+(augmentation, batch size, dropout, early stopping, and data splits).
+
+This will:
+1. Download and prepare the Cats vs Dogs dataset (if not already cached)
+2. Train the MobileNetV2-based classifier
+3. Save the trained model to models/cats_dogs.keras
+4. Write training metadata to models/metadata.json
