@@ -117,9 +117,8 @@ The trained model is saved to disk and reused by the inference service.
 ├── train.py                      # Training script (TFDS + MobileNetV2)
 ├── uv.lock                       # Locked dependency versions
 └── screenshots/
-    ├── deployment.png            # K8s deployment screenshot
-    ├── request.png               # K8s example request screenshot
-    └── service.png               # K8s running service screenshot
+    ├── deployment-service.jpg    # K8s deployment screenshot
+    └── request.jpg               # K8s running service screenshot
 ```
 
 ## Environment & Dependencies
@@ -140,7 +139,7 @@ This project intentionally runs inference on CPU only to keep the setup lightwei
 
 This will open a Linux environment with the repository already checked out and ready to run.
 
-## Running the Inference Service
+# Running the Inference Service
 
 ## Docker
 ### Build the image
@@ -185,13 +184,19 @@ curl http://localhost:8000/health | jq
 ```
 
 #### Predict
+Cat: 
+```bash
 curl -s -X POST \
   "http://localhost:8000/predict?url=https://upload.wikimedia.org/wikipedia/commons/3/3a/Cat03.jpg" \
   | jq
+```
 
+Dog:
+```bash
 curl -s -X POST \
   "http://localhost:8000/predict?url=https://www.nylabone.com/-/media/project/oneweb/nylabone/images/dog101/10-intelligent-dog-breeds/golden-retriever-tongue-out.jpg" \
   | jq
+```
 
 ## Kubernetes Image Loading Note (Important)
 
@@ -255,8 +260,9 @@ Example response:
 curl -s -X POST http://localhost:8000/predict -F "file=@cat.jpg" | jq
 ```
 
+
 ## Optional: Training the Model (Reproducibility)
-This step is optional. The repository includes a trained model artifact in models/ so you can run inference immediately.
+This step is optional. The repository includes a trained model artifact in `models/` so you can run inference immediately.
 
 To train the final selected model (MobileNetV2) from scratch:
 ```bash
